@@ -67,7 +67,7 @@ private:
             auto worker = [&] (auto && zipped_view, auto &&)
             {
                 auto hash_view = seqan3::views::minimiser_hash(seqan3::ungapped{arguments.kmer_size},
-                                                               seqan3::window_size{arguments.window_size},
+                                                               seqan3::window_size{arguments.kmer_size},
                                                                seqan3::seed{adjust_seed(arguments.kmer_size)});
 
                 for (auto && [file_name, bin_number] : zipped_view)
@@ -83,7 +83,7 @@ private:
             auto worker = [&] (auto && zipped_view, auto &&)
             {
                 auto hash_view = seqan3::views::minimiser_hash(seqan3::ungapped{arguments.kmer_size},
-                                                               seqan3::window_size{arguments.window_size},
+                                                               seqan3::window_size{arguments.kmer_size},
                                                                seqan3::seed{adjust_seed(arguments.kmer_size)})
                                  | hash_filter_view;
 
@@ -105,7 +105,7 @@ void run_program(build_arguments const & arguments)
 {
     ibf_factory<compressed> generator{arguments};
 
-    if (arguments.parts == 1u)
+    if (arguments.parts == 1u)	// unsigned int means allowed max value is twice as big but no negative values
     {
         auto ibf = generator.ibf();
         std::ofstream os{arguments.out_path, std::ios::binary};
@@ -182,7 +182,7 @@ inline bool check_for_fasta_format(std::vector<std::string> const & valid_extens
 inline void compute_minimisers(build_arguments const & arguments)
 {
     auto minimiser_view = seqan3::views::minimiser_hash(seqan3::ungapped{arguments.kmer_size},
-                                                        seqan3::window_size{arguments.window_size},
+                                                        seqan3::window_size{arguments.kmer_size},
                                                         seqan3::seed{adjust_seed(arguments.kmer_size)});
 
     uint16_t const default_cutoff{50};
