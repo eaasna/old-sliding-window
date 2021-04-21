@@ -490,21 +490,6 @@ void run_search(seqan3::argument_parser & parser)
     arguments.treshold_was_set = parser.is_option_set("threshold");
 
     // ==========================================
-    // Process --pattern.
-    // ==========================================
-    if (!arguments.pattern_size)
-    {
-        std::vector<uint64_t> sequence_lengths{};
-        seqan3::sequence_file_input<dna4_traits, seqan3::fields<seqan3::field::seq>> query_in{arguments.query_file};
-        for (auto & [seq] : query_in | seqan3::views::async_input_buffer(16))
-        {
-            sequence_lengths.push_back(std::ranges::size(seq));
-        }
-        std::sort(sequence_lengths.begin(), sequence_lengths.end());
-        arguments.pattern_size = sequence_lengths[sequence_lengths.size()/2];
-    }
-
-    // ==========================================
     // Dispatch
     // ==========================================
     raptor_search(arguments);

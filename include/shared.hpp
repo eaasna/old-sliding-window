@@ -45,7 +45,9 @@ struct build_arguments
 
 struct search_arguments
 {
-    uint32_t window_size{23u};
+    uint32_t pattern_size{50u};	// this is the size of the sliding window
+    // initially using (k,k) minimisers
+    uint32_t window_size{20u}; 	// this is the size of the winnowing minimizer
     uint8_t kmer_size{20u};
     uint8_t threads{1u};
     uint8_t parts{1u};
@@ -56,7 +58,6 @@ struct search_arguments
     double tau{0.99};
     double threshold{};
     bool treshold_was_set{false};
-    uint64_t pattern_size{};
     uint8_t errors{0};
     bool compressed{false};
     bool write_time{false};
