@@ -311,18 +311,23 @@ void run_program_single(search_arguments const & arguments)
             uint64_t begin; // index of first k-mer in window
             uint64_t end; // index of last k-mer in window 
 	    uint8_t len = seq.size(); // length of record 
+
 	    // for sliding window in record do ...
-	    for (begin = 0; begin <= len - arguments.pattern_size; begin = begin + arguments.pattern_size - arguments.overlap)
+	    for (begin = 0; begin <= len - arguments.pattern_size; 
+			    begin = begin + arguments.pattern_size - arguments.overlap)
             {       
 		end = begin + arguments.pattern_size - arguments.kmer_size + 1;
 
-		// returns a reference to the storage of the original vector without copy?
-		std::vector<uint64_t> pattern_minimiser(&minimiser[begin], &minimiser[end]);
-		// seqan views return open ended slice but here closed subvector??
-
+	        //returns a reference to the storage of the original vector without copy?
+	        std::vector<uint64_t> pattern_minimiser(&minimiser[begin], &minimiser[end]);
+	
+		//TODO: check if all minimisers of the sequence are covered
+                //seqan3::debug_stream << pattern_minimiser.size() << '\t' << std::to_string(arguments.pattern_size) << '\t';	
+		
 		// copies the vector
 		//pattern_minimiser = std::vector<uint64_t>(minimiser.begin() + begin, minimiser.begin() + end);
-		// doesn't work with std::vector
+		
+		// seqan slice doesn't work with std::vector
 		//std::vector<uint64_t> pattern_minimiser = minimiser | seqan3::views::slice(begin, end);
 		
 		// this counter is the ibf counting agent that gets fed a set of minimisers at a time
@@ -360,30 +365,33 @@ void run_program_single(search_arguments const & arguments)
 
             }
 
-/* TODO: handle this edge case separately for simplicity
+
+
 	    // last window might have a smaller overlap to make sure that the end of the sequence is covered
 	    if (begin + arguments.overlap - 1 < len)
 	    {
-		    std::vector<uint64_t> pattern_minimiser = minimiser | 
-			    seqan3::views::slice(len - arguments.pattern_size, len - arguments.pattern_size 
-					    + arguments.kmer_length);
+		// TODO: write a function to do this
+	        //returns a reference to the storage of the original vector without copy?
+	        std::vector<uint64_t> pattern_minimiser(&minimiser[len - arguments.pattern_size], 
+				&minimiser[len - arguments.pattern_size + arguments.kmer_size]);
+		
 		// this counter is the ibf counting agent that gets fed a set of minimisers at a time
                 auto & result = counter.bulk_count(pattern_minimiser); // minimiser is a vector of hash values
                 size_t const minimiser_count{pattern_minimiser.size()};
-                size_t current_bin{0};
+                
+		size_t current_bin{0};
+		for (auto && count : result)
+                {
+                    if (count >= threshold)
+                    {
+			// the result_set is a union of results from all sliding windows of a read
+			result_set.insert(current_bin);
 
-                size_t const threshold = arguments.treshold_was_set ?
-     					 static_cast<size_t>(minimiser_count * arguments.threshold) :  // do this if threshold was set
-                                         kmers_per_window == 1 ? // if threshold was not set
-					 kmer_lemma : // do this if 1 k_mer per window
-                                         precomp_thresholds[std::min(minimiser_count < min_number_of_minimisers ? // the rest is not relevant for (k,k) minimiser case
-                                        				 0 :
-                                                                         minimiser_count - min_number_of_minimisers,
-                                                                     	 max_number_of_minimisers -
-                                                                         min_number_of_minimisers)] + 2;
+                    }
+                    ++current_bin;
+                }
             }
 
-*/
 
             for (auto bin : result_set)
             {

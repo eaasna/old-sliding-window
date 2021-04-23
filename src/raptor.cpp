@@ -485,6 +485,14 @@ void run_search(seqan3::argument_parser & parser)
     // Various checks.
     // ==========================================
 
+    if (parser.is_option_set("pattern"))
+    {
+        if (arguments.pattern_size > arguments.window_size)
+            throw seqan3::argument_parser_error{"The minimiser window cannot be bigger than the sliding window."};
+    }
+    else
+        arguments.pattern_size = arguments.window_size * 2;
+
     if (parser.is_option_set("window"))
     {
         if (arguments.kmer_size > arguments.window_size)
@@ -492,7 +500,7 @@ void run_search(seqan3::argument_parser & parser)
     }
     else
         arguments.window_size = arguments.kmer_size;
-
+    
     if (parser.is_option_set("overlap"))
     {
 	if (arguments.overlap >= arguments.pattern_size)
