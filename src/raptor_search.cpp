@@ -2,10 +2,16 @@
 #include <future>
 #include <mutex>
 
+// debugging
+#include <seqan3/core/debug_stream.hpp>
+#include <string>  
+//
+
 #include <seqan3/io/sequence_file/input.hpp>
 #include <seqan3/range/views/async_input_buffer.hpp>
 #include <seqan3/range/views/chunk.hpp>
 #include <seqan3/range/views/minimiser_hash.hpp>
+#include <seqan3/range/views/slice.hpp>
 #include <seqan3/range/views/zip.hpp>
 #include <seqan3/search/dream_index/interleaved_bloom_filter.hpp>
 
@@ -41,7 +47,9 @@ std::vector<size_t> compute_simple_model(search_arguments const & arguments)
 
     if (!arguments.threshold && !do_cerealisation_in(precomp_thresholds, arguments))
     {
-        precomp_thresholds = precompute_threshold(arguments.pattern_size,
+// from minimiser_model.cpp
+// if k=w then just calculate k-mer lemma threshold
+	precomp_thresholds = precompute_threshold(arguments.pattern_size,
                                                   arguments.window_size,
                                                   arguments.kmer_size,
                                                   arguments.errors,
@@ -75,6 +83,7 @@ inline void do_parallel(t && worker, size_t const num_records, size_t const thre
 
     for (size_t i = 0; i < threads; ++i)
     {
+// start/end here show how many records to assign each task
         size_t const start = records_per_thread * i;
         size_t const end = i == (threads-1) ? num_records: records_per_thread * (i+1);
         tasks.emplace_back(std::async(std::launch::async, worker, start, end));
@@ -252,6 +261,7 @@ void run_program_single(search_arguments const & arguments)
 
     sync_out synced_out{arguments.out_file};
 
+// initially kmers_per_window = 1
     size_t const kmers_per_window = arguments.window_size - arguments.kmer_size + 1;
     size_t const kmers_per_pattern = arguments.pattern_size - arguments.kmer_size + 1;
     size_t const min_number_of_minimisers = kmers_per_window == 1 ? kmers_per_pattern :
@@ -262,16 +272,24 @@ void run_program_single(search_arguments const & arguments)
     size_t const max_number_of_minimisers = arguments.pattern_size - arguments.window_size + 1;
     std::vector<size_t> const precomp_thresholds = compute_simple_model(arguments);
 
+// [&] captures variables start, end which refer to index of first and last query read in one query file
     auto worker = [&] (size_t const start, size_t const end)
     {
-        auto counter = ibf.template counting_agent<uint16_t>();
-        std::string result_string{};
-        std::vector<uint64_t> minimiser;
+	//debugging
+	//seqan3::debug_stream << std::to_string(start) << '\t' << std::to_string(end) << '\n' ;
 
+	auto counter = ibf.template counting_agent<uint16_t>();
+        std::string result_string{};
+        std::vector<uint64_t> minimiser; // minimisers for the whole read
+	std::vector<uint64_t> pattern_minimiser; // minimisers in the sequence
+
+// all minimisers of a record
         auto hash_view = seqan3::views::minimiser_hash(seqan3::ungapped{arguments.kmer_size},
                                                        seqan3::window_size{arguments.window_size},
                                                        seqan3::seed{adjust_seed(arguments.kmer_size)});
 
+// && signifies that [id, seq] are r-values?
+// take all records from start to end and loop through them
         for (auto && [id, seq] : records | seqan3::views::slice(start, end))
         {
             minimiser.clear();
@@ -279,12 +297,31 @@ void run_program_single(search_arguments const & arguments)
             result_string += id;
             result_string += '\t';
 
-            minimiser = seq | hash_view | seqan3::views::to<std::vector<uint64_t>>;
-            auto & result = counter.bulk_count(minimiser);
-            size_t const minimiser_count{minimiser.size()};
-            size_t current_bin{0};
+// TODO: instead of bulk counting all minimisers of a read and comparing them to the threshold 
+// should bulk count all minimisers for the sliding window i.e pattern
+            minimiser = seq | hash_view | seqan3::views::to<std::vector<uint64_t>>; // the seq here is the complete read
+            
 
-            size_t const threshold = arguments.treshold_was_set ?
+//-------------------------------------------------------
+/*
+	    // TODO: for sliding window in record do...
+	    // slice the vector of minimisers 
+            uint64_t begin; // index of first k-mer in window
+            uint64_t end; // index of last k-mer in window 
+	    uint8_t len = seq.size(); // length of record 
+// Q? Is it better to precompute the begin and end values of all windows and then loop through the vector
+// or rather 
+	    // get hash values for all sliding windows
+	    for (begin = 0; begin <= len - arguments.pattern_size; begin = begin + arguments.pattern_size - arguments.overlap)
+            {       
+		    end = begin + arguments.pattern_size - arguments.kmer_length + 1;
+		    std::vector<uint64_t> pattern_minimiser = minimiser | seqan3::views::slice(begin, end);
+		// this counter is the ibf counting agent that gets fed a set of minimisers at a time
+                auto & result = counter.bulk_count(pattern_minimiser); // minimiser is a vector of hash values
+                size_t const minimiser_count{pattern_minimiser.size()};
+                size_t current_bin{0};
+
+                size_t const threshold = arguments.treshold_was_set ?
                                          static_cast<size_t>(minimiser_count * arguments.threshold) :
                                          kmers_per_window == 1 ? kmer_lemma :
                                          precomp_thresholds[std::min(minimiser_count < min_number_of_minimisers ?
@@ -293,17 +330,77 @@ void run_program_single(search_arguments const & arguments)
                                                                      max_number_of_minimisers -
                                                                          min_number_of_minimisers)] + 2;
 
-            for (auto && count : result)
-            {
-                if (count >= threshold)
+                for (auto && count : result)
                 {
-                    result_string += std::to_string(current_bin);
-                    result_string += ',';
+                    if (count >= threshold)
+                    {
+                        result_string += std::to_string(current_bin);
+                        result_string += ',';
+                    }
+                    ++current_bin;
                 }
-                ++current_bin;
+                result_string += '\n';
+                synced_out.write(result_string);
             }
-            result_string += '\n';
-            synced_out.write(result_string);
+	    // last window might have a smaller overlap to make sure that the end of the sequence is covered
+	    if (begin + arguments.overlap - 1 < len)
+	    {
+		    std::vector<uint64_t> pattern_minimiser = minimiser | 
+			    seqan3::views::slice(len - arguments.pattern_size, len - arguments.pattern_size 
+					    + arguments.kmer_length);
+		// this counter is the ibf counting agent that gets fed a set of minimisers at a time
+                auto & result = counter.bulk_count(pattern_minimiser); // minimiser is a vector of hash values
+                size_t const minimiser_count{pattern_minimiser.size()};
+                size_t current_bin{0};
+
+                size_t const threshold = arguments.treshold_was_set ?
+                                         static_cast<size_t>(minimiser_count * arguments.threshold) :
+                                         kmers_per_window == 1 ? kmer_lemma :
+                                         precomp_thresholds[std::min(minimiser_count < min_number_of_minimisers ?
+                                                                         0 :
+                                                                         minimiser_count - min_number_of_minimisers,
+                                                                     max_number_of_minimisers -
+                                                                         min_number_of_minimisers)] + 2;
+                for (auto && count : result)
+                {
+                    if (count >= threshold)
+                    {
+                        result_string += std::to_string(current_bin);
+                        result_string += ',';
+                    }
+                    ++current_bin;
+                }
+                result_string += '\n';
+                synced_out.write(result_string);
+            }
+
+*/
+
+		// this counter is the ibf counting agent that gets fed a set of minimisers at a time
+                auto & result = counter.bulk_count(pattern_minimiser); // minimiser is a vector of hash values
+                size_t const minimiser_count{pattern_minimiser.size()};
+                size_t current_bin{0};
+
+                size_t const threshold = arguments.treshold_was_set ?
+                                         static_cast<size_t>(minimiser_count * arguments.threshold) :
+                                         kmers_per_window == 1 ? kmer_lemma :
+                                         precomp_thresholds[std::min(minimiser_count < min_number_of_minimisers ?
+                                                                         0 :
+                                                                         minimiser_count - min_number_of_minimisers,
+                                                                     max_number_of_minimisers -
+                                                                         min_number_of_minimisers)] + 2;
+
+                for (auto && count : result)
+                {
+                    if (count >= threshold)
+                    {
+                        result_string += std::to_string(current_bin);
+                        result_string += ',';
+                    }
+                    ++current_bin;
+                }
+                result_string += '\n';
+                synced_out.write(result_string);
         }
     };
 

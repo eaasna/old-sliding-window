@@ -333,6 +333,12 @@ inline void init_search_parser(seqan3::argument_parser & parser, search_argument
                       "Choose the number of errors.",
                       seqan3::option_spec::standard,
                       positive_integer_validator{true});
+    parser.add_option(arguments.overlap,
+                      '\0',
+                      "overlap",
+                      "Choose how much sequential windows overlap.",
+                      seqan3::option_spec::standard,
+                      seqan3::arithmetic_range_validator{0, 50});
     parser.add_option(arguments.tau,
                       '\0',
                       "tau",
@@ -486,6 +492,15 @@ void run_search(seqan3::argument_parser & parser)
     }
     else
         arguments.window_size = arguments.kmer_size;
+
+    if (parser.is_option_set("overlap"))
+    {
+	if (arguments.overlap >= arguments.pattern_size)
+            throw seqan3::argument_parser_error{"The overlap size has to be smaller" 
+		    "than the sliding window (i.e pattern) size."};
+    }
+    else
+        arguments.overlap = arguments.pattern_size - 1;
 
     arguments.treshold_was_set = parser.is_option_set("threshold");
 
