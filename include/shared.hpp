@@ -47,8 +47,8 @@ struct search_arguments
 {
     uint32_t pattern_size{50u};	// this is the size of the sliding window
     // initially using (k,k) minimisers
-    uint32_t window_size{20u}; 	// this is the size of the winnowing minimizer
-    uint8_t kmer_size{20u};
+    uint32_t window_size{17u}; 	// this is the size of the winnowing minimizer
+    uint8_t kmer_size{17u};
     uint8_t overlap{49u};	// how much sequential sliding windows i.e patterns overlap
     uint8_t threads{1u};
     uint8_t parts{1u};

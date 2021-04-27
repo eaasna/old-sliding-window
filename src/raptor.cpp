@@ -487,7 +487,7 @@ void run_search(seqan3::argument_parser & parser)
 
     if (parser.is_option_set("pattern"))
     {
-        if (arguments.pattern_size > arguments.window_size)
+        if (arguments.pattern_size < arguments.window_size)
             throw seqan3::argument_parser_error{"The minimiser window cannot be bigger than the sliding window."};
     }
     else
@@ -509,6 +509,12 @@ void run_search(seqan3::argument_parser & parser)
     }
     else
         arguments.overlap = arguments.pattern_size - 1;
+    
+    if (parser.is_option_set("pattern") & parser.is_option_set("kmer") & parser.is_option_set("error"))
+    {
+        if (arguments.pattern_size + 1 <= (arguments.errors + 1) * arguments.kmer_size)
+	    throw seqan3::argument_parser_error{"The kmer lemma threshold is 0"};
+    }
 
     arguments.treshold_was_set = parser.is_option_set("threshold");
 

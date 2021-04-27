@@ -289,6 +289,12 @@ void run_program_single(search_arguments const & arguments)
 	std::vector<uint64_t> pattern_minimiser; // minimisers in the sliding window
 	size_t const threshold = kmer_lemma;
 
+
+	seqan3::debug_stream << "Pattern size: " << std::to_string(arguments.pattern_size) << '\n';
+	seqan3::debug_stream << "Kmer size: " << std::to_string(arguments.kmer_size) << '\n';
+	seqan3::debug_stream << "Errors: " << std::to_string(arguments.errors) << '\n';
+	seqan3::debug_stream << "Threshold: " << threshold << '\n';
+
 	// all minimisers of a record
         auto hash_view = seqan3::views::minimiser_hash(seqan3::ungapped{arguments.kmer_size},
                                                        seqan3::window_size{arguments.window_size},
@@ -320,10 +326,18 @@ void run_program_single(search_arguments const & arguments)
 
 	        //returns a reference to the storage of the original vector without copy?
 	        std::vector<uint64_t> pattern_minimiser(&minimiser[begin], &minimiser[end]);
-	
-		//TODO: check if all minimisers of the sequence are covered
-                //seqan3::debug_stream << pattern_minimiser.size() << '\t' << std::to_string(arguments.pattern_size) << '\t';	
-		
+
+
+		/*	
+		// TODO: are there as many sliding windows as you'd expect?
+		if (begin <= 92) 
+		{
+                seqan3::debug_stream << "Nr of minimisers: " << pattern_minimiser.size() << 
+			'\n' << "Pattern length: " << std::to_string(arguments.pattern_size) << 
+			'\n' << "Minimiser length: " << std::to_string(arguments.window_size) << '\n';	
+		}
+		*/
+
 		// copies the vector
 		//pattern_minimiser = std::vector<uint64_t>(minimiser.begin() + begin, minimiser.begin() + end);
 		
@@ -373,8 +387,14 @@ void run_program_single(search_arguments const & arguments)
 		// TODO: write a function to do this
 	        //returns a reference to the storage of the original vector without copy?
 	        std::vector<uint64_t> pattern_minimiser(&minimiser[len - arguments.pattern_size], 
-				&minimiser[len - arguments.pattern_size + arguments.kmer_size]);
+				&minimiser[len - arguments.kmer_size + 1]);
 		
+		/*
+                seqan3::debug_stream << "Last nr of minimisers: " << pattern_minimiser.size() << 
+			'\n' << "Pattern length: " << std::to_string(arguments.pattern_size) << 
+			'\n' << "Minimiser length: " << std::to_string(arguments.window_size) << '\n';	
+		*/
+
 		// this counter is the ibf counting agent that gets fed a set of minimisers at a time
                 auto & result = counter.bulk_count(pattern_minimiser); // minimiser is a vector of hash values
                 size_t const minimiser_count{pattern_minimiser.size()};
