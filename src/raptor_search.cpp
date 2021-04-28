@@ -282,13 +282,15 @@ void run_program_single(search_arguments const & arguments)
     // [&] captures variables start, end which refer to index of first and last query read in one query file
     auto worker = [&] (size_t const start, size_t const end)
     {
-	auto counter = ibf.template counting_agent<uint16_t>();
-        std::string result_string{};
+	// sequential calls of bulk_count invalidate the previous result
+	auto full_counter = ibf.template counting_agent<uint16_t>();
+	auto pre_counter = ibf.template counting_agent<uint16_t>();
+	auto post_counter = ibf.template counting_agent<uint16_t>();
+        
+	std::string result_string{};
 	std::set<size_t> result_set; // gather all bins with a hit for each read
         std::vector<uint64_t> minimiser; // minimisers for the whole read
-	std::vector<uint64_t> pattern_minimiser; // minimisers in the sliding window
 	size_t const threshold = kmer_lemma;
-
 
 	seqan3::debug_stream << "Pattern size: " << std::to_string(arguments.pattern_size) << '\n';
 	seqan3::debug_stream << "Kmer size: " << std::to_string(arguments.kmer_size) << '\n';
@@ -314,73 +316,82 @@ void run_program_single(search_arguments const & arguments)
 
             minimiser = seq | hash_view | seqan3::views::to<std::vector<uint64_t>>; // the seq here is the complete read
             
-            uint64_t begin; // index of first k-mer in window
-            uint64_t end; // index of last k-mer in window 
-	    uint8_t len = seq.size(); // length of record 
+            uint16_t begin; // index of first k-mer in window
+            uint16_t end; // index of last k-mer in window 
+	    uint16_t pre_begin;
+	    uint16_t pre_end;
+	    uint8_t len = seq.size(); // length of record
 
-	    // for sliding window in record do ...
-	    for (begin = 0; begin <= len - arguments.pattern_size; 
+	    //1. find counter result for first pattern minimisers
+	    //2. find counter result for minimisers that don't overlap with next pattern
+	    //		subtract them from total counter result
+	    //3. find counter result for minimisers further from initial pattern
+	    //		add them to total counter result
+
+
+//---------- for first pattern of each read, query the total pattern lenght
+            	// TODO: use ranges i.e views instead?
+            std::vector<uint64_t> pattern_minimiser(&minimiser[0], 
+			    &minimiser[arguments.pattern_size - arguments.kmer_size + 1]);	
+		
+            auto & result = full_counter.bulk_count(pattern_minimiser); // count occurrences in each bin of all pattern_minimisers
+	    std::vector<uint16_t> final_result(result); // changeable vector of initial values
+            
+	    size_t const minimiser_count{pattern_minimiser.size()}; // not relevant for standard (k,k) minimiser case
+            seqan3::debug_stream << "Minimiser count: " << std::to_string(minimiser_count);
+	    
+	    for (size_t current_bin = 0; current_bin < result.size(); current_bin++)
+            {	    
+		auto && count = result[current_bin];
+                if (count >= threshold)
+                {
+	        // the result_set is a union of results from all sliding windows of a read
+	        result_set.insert(current_bin);
+
+                }
+            }
+	    
+//---------- for sliding window in record do ... for all "middle" patterns
+	    for (begin = arguments.pattern_size - arguments.overlap; 
+			    begin <= len - arguments.pattern_size; 
 			    begin = begin + arguments.pattern_size - arguments.overlap)
             {       
 		end = begin + arguments.pattern_size - arguments.kmer_size + 1;
 
-	        //returns a reference to the storage of the original vector without copy?
-	        std::vector<uint64_t> pattern_minimiser(&minimiser[begin], &minimiser[end]);
-
-
-		/*	
-		// TODO: are there as many sliding windows as you'd expect?
-		if (begin <= 92) 
-		{
-                seqan3::debug_stream << "Nr of minimisers: " << pattern_minimiser.size() << 
-			'\n' << "Pattern length: " << std::to_string(arguments.pattern_size) << 
-			'\n' << "Minimiser length: " << std::to_string(arguments.window_size) << '\n';	
-		}
-		*/
-
-		// copies the vector
-		//pattern_minimiser = std::vector<uint64_t>(minimiser.begin() + begin, minimiser.begin() + end);
+		// store begin and end indices of minimisers in previous pattern
+		pre_begin = begin - arguments.pattern_size + arguments.overlap;
+		pre_end = end - arguments.pattern_size + arguments.overlap;
 		
-		// seqan slice doesn't work with std::vector
-		//std::vector<uint64_t> pattern_minimiser = minimiser | seqan3::views::slice(begin, end);
-		
-		// this counter is the ibf counting agent that gets fed a set of minimisers at a time
-                auto & result = counter.bulk_count(pattern_minimiser); // minimiser is a vector of hash values
-                size_t const minimiser_count{pattern_minimiser.size()}; // not relevant for standard (k,k) minimiser case
-             
+		// minimisers that were in previous pattern but not in current
+		std::vector<uint64_t> pre_pattern_minimiser(&minimiser[pre_begin], &minimiser[begin]);
+		auto & pre_result = pre_counter.bulk_count(pre_pattern_minimiser);
+		// minimisers that are in current pattern but not in previous
+		std::vector<uint64_t> post_pattern_minimiser(&minimiser[pre_end], &minimiser[end]);
+		auto & post_result = post_counter.bulk_count(post_pattern_minimiser);
+                    
+		// TODO: is the new pattern the expected length?
+		size_t const new_count{pre_pattern_minimiser.size() + post_pattern_minimiser.size()}; 
+		seqan3::debug_stream << "New minimiser count: " << std::to_string(new_count) << '\n';
 
-		// use this if want to manually change threshold or w > k
-		/* 
-                size_t const threshold = arguments.treshold_was_set ?
-					 // do this if threshold was set
-     					 static_cast<size_t>(minimiser_count * arguments.threshold) :  
-                                         kmers_per_window == 1 ? // if threshold was not set
-					 kmer_lemma : // do this if 1 k_mer per window
-					 // the rest is not relevant for (k,k) minimisers
-                                         precomp_thresholds[std::min(minimiser_count < min_number_of_minimisers ? 
-                                        				 0 :
-                                                                         minimiser_count - min_number_of_minimisers,
-                                                                     	 max_number_of_minimisers -
-                							 min_number_of_minimisers)] + 2;
-                */
-
-		
-	        size_t current_bin{0};
-		for (auto && count : result)
+		for (size_t current_bin = 0; current_bin < result.size(); current_bin++)
+		//for (auto && count : result)
                 {
+		    
+		    final_result[current_bin] = result[current_bin] - pre_result[current_bin] + post_result[current_bin];
+		    auto && count = final_result[current_bin];
                     if (count >= threshold)
                     {
 			// the result_set is a union of results from all sliding windows of a read
 			result_set.insert(current_bin);
 
                     }
-                    ++current_bin;
                 }
 
             }
 
-
-
+//---------- for last pattern in window
+// TODO: handle last window separately for ease
+/*
 	    // last window might have a smaller overlap to make sure that the end of the sequence is covered
 	    if (begin + arguments.overlap - 1 < len)
 	    {
@@ -389,16 +400,21 @@ void run_program_single(search_arguments const & arguments)
 	        std::vector<uint64_t> pattern_minimiser(&minimiser[len - arguments.pattern_size], 
 				&minimiser[len - arguments.kmer_size + 1]);
 		
-		/*
+		
                 seqan3::debug_stream << "Last nr of minimisers: " << pattern_minimiser.size() << 
 			'\n' << "Pattern length: " << std::to_string(arguments.pattern_size) << 
 			'\n' << "Minimiser length: " << std::to_string(arguments.window_size) << '\n';	
-		*/
+		
 
 		// this counter is the ibf counting agent that gets fed a set of minimisers at a time
                 auto & result = counter.bulk_count(pattern_minimiser); // minimiser is a vector of hash values
                 size_t const minimiser_count{pattern_minimiser.size()};
                 
+			
+                seqan3::debug_stream << "REsults size: " << std::to_string(result.size()) << '\n'; 
+			//<< "" << std::to_string() << << 
+	
+
 		size_t current_bin{0};
 		for (auto && count : result)
                 {
@@ -411,8 +427,8 @@ void run_program_single(search_arguments const & arguments)
                     ++current_bin;
                 }
             }
-
-
+*/
+//---------- write out union of bin hits over all patterns
             for (auto bin : result_set)
             {
 	        result_string += std::to_string(bin);
