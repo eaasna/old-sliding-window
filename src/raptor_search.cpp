@@ -292,6 +292,7 @@ void run_program_single(search_arguments const & arguments)
         std::vector<uint64_t> minimiser; // minimisers for the whole read
 	size_t const threshold = kmer_lemma;
 
+	// debugging
 	seqan3::debug_stream << "Pattern size: " << std::to_string(arguments.pattern_size) << '\n';
 	seqan3::debug_stream << "Kmer size: " << std::to_string(arguments.kmer_size) << '\n';
 	seqan3::debug_stream << "Errors: " << std::to_string(arguments.errors) << '\n';
@@ -334,11 +335,11 @@ void run_program_single(search_arguments const & arguments)
             std::vector<uint64_t> pattern_minimiser(&minimiser[0], 
 			    &minimiser[arguments.pattern_size - arguments.kmer_size + 1]);	
 		
-            auto & result = full_counter.bulk_count(pattern_minimiser); // count occurrences in each bin of all pattern_minimisers
+            auto & result = full_counter.bulk_count(pattern_minimiser); // count occurrences in each bin of pattern_minimisers
 	    std::vector<uint16_t> final_result(result); // changeable vector of initial values
             
 	    size_t const minimiser_count{pattern_minimiser.size()}; // not relevant for standard (k,k) minimiser case
-            seqan3::debug_stream << "Minimiser count: " << std::to_string(minimiser_count);
+            // seqan3::debug_stream << "Minimiser count: " << std::to_string(minimiser_count) << '\n';
 	    
 	    for (size_t current_bin = 0; current_bin < result.size(); current_bin++)
             {	    
@@ -369,15 +370,27 @@ void run_program_single(search_arguments const & arguments)
 		std::vector<uint64_t> post_pattern_minimiser(&minimiser[pre_end], &minimiser[end]);
 		auto & post_result = post_counter.bulk_count(post_pattern_minimiser);
                     
-		// TODO: is the new pattern the expected length?
 		size_t const new_count{pre_pattern_minimiser.size() + post_pattern_minimiser.size()}; 
-		seqan3::debug_stream << "New minimiser count: " << std::to_string(new_count) << '\n';
+		// is the new pattern the expected length?
+		// seqan3::debug_stream << "New minimiser count: " << std::to_string(new_count) << '\n';
 
 		for (size_t current_bin = 0; current_bin < result.size(); current_bin++)
 		//for (auto && count : result)
                 {
+	
+		    final_result[current_bin] = final_result[current_bin] - pre_result[current_bin] + post_result[current_bin];
 		    
-		    final_result[current_bin] = result[current_bin] - pre_result[current_bin] + post_result[current_bin];
+		    /*
+		    if (current_bin == 50)
+		    {
+		    // debugging: why so many hits?
+		    seqan3::debug_stream << "result[current_bin]= " << std::to_string(result[current_bin]) << '\n'; 
+		    seqan3::debug_stream << "pre_result[current_bin]= " << std::to_string(pre_result[current_bin]) << '\n'; 
+		    seqan3::debug_stream << "post_result[current_bin]= " << std::to_string(post_result[current_bin]) << '\n'; 
+	            seqan3::debug_stream << "How many hits in bin " << std::to_string(current_bin) << '\t' 
+			    << std::to_string(final_result[current_bin]) << '\n';
+		    }
+		    */
 		    auto && count = final_result[current_bin];
                     if (count >= threshold)
                     {
