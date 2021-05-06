@@ -328,16 +328,15 @@ void run_program_single(search_arguments const & arguments)
 	    std::vector<size_t> begin_vector;
 	    for (size_t i = 0; i <= read_len - arguments.pattern_size; 
 			    i = i + arguments.pattern_size - arguments.overlap)
-            {  
-                begin_vector.push_back(i);
+            {
+                begin_vector.push_back(i);  
 	    }
-	    
+
 	    if (begin_vector.back() < read_len - arguments.pattern_size)
 	    {	
 		// last pattern might have a smaller overlap to make sure the end of the read is covered
                 begin_vector.push_back(read_len - arguments.pattern_size);
 	    }
-
 
 //--------- table of counting vectors newly created for each read
 	    // rows: each k-mer of read
@@ -350,12 +349,13 @@ void run_program_single(search_arguments const & arguments)
 	        seqan3::counting_vector<uint8_t> counts(ibf.bin_count(), 0);
 		counts += agent.bulk_contains(min);
                 counting_table.push_back(counts);
+		
 	    }
 
 //--------- count occurrences of kmers
-	    seqan3::counting_vector<uint8_t> total_counts(ibf.bin_count(), 0);
 	    for (auto begin : begin_vector)
 	    {
+	        seqan3::counting_vector<uint8_t> total_counts(ibf.bin_count(), 0);
 		// take the slice of the table that accounts for the current pattern and sum over all counting vectors
                 for (size_t i = 0; i <= arguments.pattern_size - arguments.kmer_size; i++)
 	        {
@@ -365,12 +365,14 @@ void run_program_single(search_arguments const & arguments)
                 for (size_t current_bin = 0; current_bin < total_counts.size(); current_bin++)
                 {	    
 		    auto && count = total_counts[current_bin];
-                    if (count >= threshold)
+		    if (count >= threshold)
                     {
-	            // the result_set is a union of results from all sliding windows of a read
-	            result_set.insert(current_bin);
+		        // seqan3::debug_stream << count << '\t';
+	                // the result_set is a union of results from all sliding windows of a read
+	                result_set.insert(current_bin);
                     }
                 }
+		// seqan3::debug_stream << '\n';
 	    }	
 
 //---------- write out union of bin hits over all patterns
