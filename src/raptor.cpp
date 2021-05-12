@@ -338,7 +338,7 @@ inline void init_search_parser(seqan3::argument_parser & parser, search_argument
                       "overlap",
                       "Choose how much sequential windows overlap.",
                       seqan3::option_spec::standard,
-                      seqan3::arithmetic_range_validator{0, 50});
+                      seqan3::arithmetic_range_validator{0, 60});
     parser.add_option(arguments.tau,
                       '\0',
                       "tau",

@@ -365,9 +365,9 @@ void run_program_single(search_arguments const & arguments)
                 for (size_t current_bin = 0; current_bin < total_counts.size(); current_bin++)
                 {	    
 		    auto && count = total_counts[current_bin];
+		    // seqan3::debug_stream << std::to_string(count) << "\t";
 		    if (count >= threshold)
                     {
-		        // seqan3::debug_stream << count << '\t';
 	                // the result_set is a union of results from all sliding windows of a read
 	                result_set.insert(current_bin);
                     }
