@@ -1,21 +1,14 @@
-# Raptor [![build status](https://github.com/seqan/raptor/workflows/Raptor%20CI/badge.svg?branch=master)](https://github.com/seqan/raptor/actions)
+# Sliding window filter
 ### A fast and space-efficient pre-filter for querying very large collections of nucleotide sequences
+The aim of this repository is to develop an IBF based prefilter for metagenomics read mapping. The IBF is created from the (k,k)-minimiser content of the reference database. The filter excludes parts of the reference datbase for each query read. Only reference sequences where an approximate local match for the query sequence was found are retained. 
+A local match is defined as:
+* length >= w
+* errors <= e
+
+where w is the window length and e is the allowed number of errors. Each read is divided into multiple possibly overlapping windows. The (k, k)-minimiser content of each window is then queried in the IBF.
 
 ## Download and Installation
 There may be performance benefits when compiling from source, especially when using `-march=native` as compiler directive.
-
-### Install with bioconda (Linux)
-[![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/raptor/README.html)
-
-```bash
-conda install -c bioconda -c conda-forge raptor
-```
-
-### Install with brew (Linux, macOS)
-
-```bash
-brew install brewsci/bio/raptor
-```
 
 ### Compile from source
 <details><summary>Prerequisites</summary>
@@ -67,7 +60,7 @@ raptor --version
 
 </details>
 
-### Example Data and Usage
+## Example Data and Usage
 A toy data set can be found [here](https://ftp.imp.fu-berlin.de/pub/seiler/raptor/).
 
 ```bash
@@ -138,7 +131,7 @@ raptor build --help
 raptor search --help
 ```
 
-#### Preprocessing the input
+### Preprocessing the input
 We offer the option to precompute the minimisers of the input files. This is useful to build indices of big datasets (in the range of several TiB) and also allows an estimation of the needed index size since the amount of minimisers is known.
 Following above example, we would change the build step as follows:
 
