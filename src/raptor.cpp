@@ -324,7 +324,7 @@ inline void init_search_parser(seqan3::argument_parser & parser, search_argument
     parser.add_option(arguments.out_file,
                       '\0',
                       "output",
-                      "Please provide a valid path to the output.",
+                      "Provide a valid path to the output.",
                       seqan3::option_spec::required,
                       seqan3::output_file_validator{});
     parser.add_option(arguments.errors,
@@ -337,8 +337,7 @@ inline void init_search_parser(seqan3::argument_parser & parser, search_argument
                       '\0',
                       "overlap",
                       "Choose how much sequential windows overlap.",
-                      seqan3::option_spec::standard,
-                      seqan3::arithmetic_range_validator{0, 60});
+                      seqan3::option_spec::standard);
     parser.add_option(arguments.tau,
                       '\0',
                       "tau",

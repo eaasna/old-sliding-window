@@ -304,6 +304,8 @@ void run_program_single(search_arguments const & arguments)
 	seqan3::debug_stream << "Bin count: " << std::to_string(ibf.bin_count()) << '\n';
 
 	// all minimisers of a record
+	// taking the lexicographical minimiser would lead to skewed minimsers 
+	// seed is used to counteract this
         auto hash_view = seqan3::views::minimiser_hash(seqan3::ungapped{arguments.kmer_size},
                                                        seqan3::window_size{arguments.window_size},
                                                        seqan3::seed{adjust_seed(arguments.kmer_size)});
